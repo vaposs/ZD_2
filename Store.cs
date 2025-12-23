@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace yrsyrq
+namespace DZ_2
 {
     class MainClass
     {
@@ -9,7 +9,6 @@ namespace yrsyrq
         {
             new Solution().Work();
         }
-
     }
 
     class Solution
@@ -18,6 +17,7 @@ namespace yrsyrq
         {
             Good iPhone12 = new Good("IPhone 12");
             Good iPhone11 = new Good("IPhone 11");
+            //Good iPhone13 = new Good(""); // вызывает ошибку
 
             Warehouse warehouse = new Warehouse();
 
@@ -26,7 +26,6 @@ namespace yrsyrq
             warehouse.Delive(iPhone12, 10);
             warehouse.Delive(iPhone11, 1);
 
-
             Console.WriteLine("остаток на складе");
             warehouse.ShowGoods();
 
@@ -34,7 +33,6 @@ namespace yrsyrq
             int firstCountBuy = 4;
             int secondCountBuy = 3;
             //-------------------------------------
-
 
             OperationBuy(shop, iPhone12, firstCountBuy);
             OperationBuy(shop, iPhone11, secondCountBuy);
@@ -53,17 +51,34 @@ namespace yrsyrq
 
         private void OperationBuy(Shop shop, Good good, int count)
         {
-            if (shop.Warehouse._goods.TryGetValue(good, out int currentCount))
+            if (shop != null && good != null && count > 0)
             {
-                if (currentCount >= count)
+                if (shop.Warehouse.Goods.TryGetValue(good, out int currentCount))
                 {
-                    shop.Card.Delive(good, count);
-                    shop.Warehouse.CellGood(good, currentCount - count);
+                    if (currentCount >= count)
+                    {
+                        shop.Card.Delive(good, count);
+                        shop.Warehouse.CellGood(good, currentCount - count);
+                    }
+                }
+            }
+            else
+            {
+                if (shop == null)
+                {
+                    throw new ArgumentNullException("переменная не инициализирована", nameof(shop));
+                }
+                else if (good == null)
+                {
+                    throw new ArgumentNullException("переменная не инициализирована", nameof(good));
+                }
+                else
+                {
+                    throw new ArgumentOutOfRangeException("количество не может быть 0 или меньше", nameof(count));
                 }
             }
         }
     }
-
 
     class Warehouse : Show
     {
@@ -74,7 +89,7 @@ namespace yrsyrq
 
         public void CellGood(Good good, int count)
         {
-            _goods[good] = count;
+            Goods[good] = count;
         }
     }
 
@@ -85,11 +100,17 @@ namespace yrsyrq
 
         public Shop(Warehouse warehouse)
         {
-            Warehouse = warehouse;
+            if (warehouse != null)
+            {
+                Warehouse = warehouse;
+            }
+            else
+            {
+                throw new ArgumentNullException("переменная не инициализирована", nameof(warehouse));
+            }
+
             Card = new Card();
         }
-
-
     }
 
     class Card : Show
@@ -112,6 +133,7 @@ namespace yrsyrq
         public Good(string name)
         {
             Name = name;
+            Name = name != string.Empty ? name : throw new ArgumentNullException("поле не может быть пустым", nameof(name));
         }
 
         public Good Clone()
@@ -122,24 +144,41 @@ namespace yrsyrq
 
     abstract class Show
     {
-        public Dictionary<Good, int> _goods { get; private set; }
+        public Dictionary<Good, int> Goods { get; private set; }
 
         public Show()
         {
-            _goods = new Dictionary<Good, int>();
+            Goods = new Dictionary<Good, int>();
         }
 
         public void ShowGoods()
         {
-            foreach (var good in _goods)
+            if (Goods != null)
             {
-                Console.WriteLine($"{good.Key.Name} - {good.Value}");
+                foreach (var good in Goods)
+                {
+                    Console.WriteLine($"{good.Key.Name} - {good.Value}");
+                }
             }
         }
 
         public void Delive(Good good, int count)
         {
-            _goods.Add(good, count);
+            if (good != null && count > 0)
+            {
+                Goods.Add(good, count);
+            }
+            else
+            {
+                if (count <= 0)
+                {
+                    throw new ArgumentOutOfRangeException("колечество не может быть 0 или меньше", nameof(count));
+                }
+                else
+                {
+                    throw new ArgumentNullException("переменная не инициализирована", nameof(good));
+                }
+            }
         }
     }
 }
