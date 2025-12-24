@@ -1,184 +1,269 @@
 using System;
 using System.Collections.Generic;
 
-namespace DZ_2
+class Program
 {
-    class MainClass
+    static void Main(string[] args)
     {
-        public static void Main(string[] args)
+        Good iPhone12 = new Good("IPhone 12");
+        Good iPhone11 = new Good("IPhone 11");
+
+        Warehouse warehouse = new Warehouse();
+        Shop shop = new Shop(warehouse);
+
+        warehouse.Delive(iPhone12, 10);
+        warehouse.Delive(iPhone11, 1);
+
+        //Вывод всех товаров на складе с их остатком
+        warehouse.PrintStock();
+
+        Cart cart = shop.Cart();
+
+        cart.Add(iPhone12, 4);
+        //cart.Add(iPhone11, 3); // При такой ситуации возникает ошибка так, как нет нужного количества товара на складе
+
+        cart.PrintCart();
+
+        Order order = cart.Order();
+        Console.WriteLine($"Ссылка для оплаты: {order.Paylink}");
+
+        Console.WriteLine("\n=== Состояние склада после заказа ===");
+        warehouse.PrintStock();
+
+        //cart.Add(iPhone12, 9); // Ошибка, после заказа со склада убираются заказанные товары
+        Console.ReadKey();
+    }
+}
+
+public class Good
+{
+    public string Name { get; }
+
+    public Good(string name)
+    {
+        Name = name;
+    }
+
+    public override bool Equals(object obj)
+    {
+        if (obj is Good other)
         {
-            new Solution().Work();
+            return Name == other.Name;
+        }
+        return false;
+    }
+
+    public override int GetHashCode()
+    {
+        return Name.GetHashCode();
+    }
+
+    public override string ToString()
+    {
+        return Name;
+    }
+}
+
+public class StockItem
+{
+    public Good Good { get; }
+    public int Count { get; private set; }
+
+    public StockItem(Good good, int count)
+    {
+        Good = good != null ? good : throw new ArgumentNullException("переменная не инициализирована", nameof(good));
+        Count = count > 0 ? count : throw new ArgumentOutOfRangeException(" не может быть 0 или меньше 0", nameof(count));
+    }
+}
+
+public class Warehouse
+{
+    private Dictionary<Good, int> _goods = new Dictionary<Good, int>();
+
+    public void Delive(Good good, int quantity)
+    {
+        if (quantity <= 0)
+            throw new ArgumentException("Количество должно быть больше 0", nameof(quantity));
+
+        if (_goods.ContainsKey(good))
+        {
+            _goods[good] += quantity;
+        }
+        else
+        {
+            _goods[good] = quantity;
         }
     }
 
-    class Solution
+    public bool HasGood(Good good, int count)
     {
-        public void Work()
+        return _goods.ContainsKey(good) && _goods[good] >= count;
+    }
+
+    // Забрать товар со склада
+    public void Take(Good good, int count)
+    {
+        if (!HasGood(good, count))
+            throw new InvalidOperationException($"Недостаточно товара {good.Name} на складе. Требуется: {count}, есть: {(_goods.ContainsKey(good) ? _goods[good] : 0)}");
+
+        _goods[good] -= count;
+
+        if (_goods[good] == 0)
         {
-            Good iPhone12 = new Good("IPhone 12");
-            Good iPhone11 = new Good("IPhone 11");
-            //Good iPhone13 = new Good(""); // вызывает ошибку
-
-            Warehouse warehouse = new Warehouse();
-
-            Shop shop = new Shop(warehouse);
-
-            warehouse.Delive(iPhone12, 10);
-            warehouse.Delive(iPhone11, 1);
-
-            Console.WriteLine("остаток на складе");
-            warehouse.ShowGoods();
-
-            // блок входящих данных от пользователя
-            int firstCountBuy = 4;
-            int secondCountBuy = 3;
-            //-------------------------------------
-
-            OperationBuy(shop, iPhone12, firstCountBuy);
-            OperationBuy(shop, iPhone11, secondCountBuy);
-
-            Console.WriteLine("корзина покупателя");
-            shop.Card.ShowGoods();
-
-            shop.Card.ShowDelivery();
-
-            Console.WriteLine("остаток на складе");
-            warehouse.ShowGoods();
-
-            Console.WriteLine("end");
-            Console.ReadLine();
-        }
-
-        private void OperationBuy(Shop shop, Good good, int count)
-        {
-            if (shop != null && good != null && count > 0)
-            {
-                if (shop.Warehouse.Goods.TryGetValue(good, out int currentCount))
-                {
-                    if (currentCount >= count)
-                    {
-                        shop.Card.Delive(good, count);
-                        shop.Warehouse.CellGood(good, currentCount - count);
-                    }
-                }
-            }
-            else
-            {
-                if (shop == null)
-                {
-                    throw new ArgumentNullException("переменная не инициализирована", nameof(shop));
-                }
-                else if (good == null)
-                {
-                    throw new ArgumentNullException("переменная не инициализирована", nameof(good));
-                }
-                else
-                {
-                    throw new ArgumentOutOfRangeException("количество не может быть 0 или меньше", nameof(count));
-                }
-            }
+            _goods.Remove(good);
         }
     }
 
-    class Warehouse : Show
+    public int GetCount(Good good)
     {
-        public Warehouse() : base()
-        {
+        return _goods.ContainsKey(good) ? _goods[good] : 0;
+    }
 
+    public void PrintStock()
+    {
+        Console.WriteLine("Товары на складе:");
+        if (_goods.Count == 0)
+        {
+            Console.WriteLine("  Склад пуст");
+            return;
         }
 
-        public void CellGood(Good good, int count)
+        foreach (var item in _goods)
         {
-            Goods[good] = count;
+            Console.WriteLine($"  {item.Key.Name}: {item.Value} шт.");
+        }
+        Console.WriteLine();
+    }
+
+    public IReadOnlyDictionary<Good, int> GetAllGoods()
+    {
+        return new Dictionary<Good, int>(_goods);
+    }
+}
+
+public class Cart
+{
+    private Dictionary<Good, int> _items = new Dictionary<Good, int>();
+    private Warehouse _warehouse;
+    private bool _orderPlaced = false;
+
+    public Cart(Warehouse warehouse)
+    {
+        _warehouse = warehouse;
+    }
+
+    public void Add(Good good, int quantity)
+    {
+        if (_orderPlaced)
+            throw new InvalidOperationException("Нельзя добавлять товары после оформления заказа");
+
+        if (quantity <= 0)
+            throw new ArgumentException("Количество должно быть больше 0", nameof(quantity));
+
+        if (!_warehouse.HasGood(good, quantity))
+        {
+            throw new InvalidOperationException($"Недостаточно товара {good.Name} на складе. Требуется: {quantity}, есть: {_warehouse.GetCount(good)}");
+        }
+
+        if (_items.ContainsKey(good))
+        {
+            _items[good] += quantity;
+        }
+        else
+        {
+            _items[good] = quantity;
         }
     }
 
-    class Shop
+    public Order Order()
     {
-        public Warehouse Warehouse { get; private set; }
-        public Card Card { get; private set; }
+        if (_orderPlaced)
+            throw new InvalidOperationException("Заказ уже оформлен");
 
-        public Shop(Warehouse warehouse)
+        if (_items.Count == 0)
+            throw new InvalidOperationException("Корзина пуста");
+
+        foreach (var item in _items)
         {
-            if (warehouse != null)
-            {
-                Warehouse = warehouse;
-            }
-            else
-            {
-                throw new ArgumentNullException("переменная не инициализирована", nameof(warehouse));
-            }
-
-            Card = new Card();
+            _warehouse.Take(item.Key, item.Value);
         }
+
+        _orderPlaced = true;
+        return new Order(_items);
     }
 
-    class Card : Show
+    public void PrintCart()
     {
-        public Card() : base()
+        Console.WriteLine("Товары в корзине:");
+        if (_items.Count == 0)
         {
-
+            Console.WriteLine("  Корзина пуста");
+            return;
         }
 
-        public void ShowDelivery()
+        foreach (var item in _items)
         {
-            Console.WriteLine("покупка");
+            Console.WriteLine($"  {item.Key.Name}: {item.Value} шт.");
         }
+        Console.WriteLine();
     }
 
-    class Good
+    public Dictionary<Good, int> GetItems()
     {
-        public string Name { get; private set; }
-
-        public Good(string name)
-        {
-            Name = name;
-            Name = name != string.Empty ? name : throw new ArgumentNullException("поле не может быть пустым", nameof(name));
-        }
-
-        public Good Clone()
-        {
-            return new Good(Name);
-        }
+        return new Dictionary<Good, int>(_items);
     }
 
-    abstract class Show
+    public bool IsOrderPlaced => _orderPlaced;
+}
+
+public class Order
+{
+    private Dictionary<Good, int> _items;
+
+    public Order(Dictionary<Good, int> items)
     {
-        public Dictionary<Good, int> Goods { get; private set; }
+        _items = new Dictionary<Good, int>(items);
+    }
 
-        public Show()
-        {
-            Goods = new Dictionary<Good, int>();
-        }
+    public string Paylink
+    {
+        get { return "оплаченно"; }
+    }
 
-        public void ShowGoods()
-        {
-            if (Goods != null)
-            {
-                foreach (var good in Goods)
-                {
-                    Console.WriteLine($"{good.Key.Name} - {good.Value}");
-                }
-            }
-        }
 
-        public void Delive(Good good, int count)
+    public Dictionary<Good, int> GetItems()
+    {
+        return new Dictionary<Good, int>(_items);
+    }
+
+    public void PrintOrder()
+    {
+        Console.WriteLine("Заказ:");
+        foreach (var item in _items)
         {
-            if (good != null && count > 0)
-            {
-                Goods.Add(good, count);
-            }
-            else
-            {
-                if (count <= 0)
-                {
-                    throw new ArgumentOutOfRangeException("колечество не может быть 0 или меньше", nameof(count));
-                }
-                else
-                {
-                    throw new ArgumentNullException("переменная не инициализирована", nameof(good));
-                }
-            }
+            Console.WriteLine($"  {item.Key.Name}: {item.Value} шт.");
         }
+        Console.WriteLine($"Ссылка для оплаты: {Paylink}");
+        Console.WriteLine();
+    }
+}
+
+public class Shop
+{
+    private Warehouse _warehouse;
+
+    public Shop(Warehouse warehouse)
+    {
+        _warehouse = warehouse;
+    }
+
+    public Cart Cart()
+    {
+        return new Cart(_warehouse);
+    }
+
+    public void PrintAvailableGoods()
+    {
+        _warehouse.PrintStock();
     }
 }
